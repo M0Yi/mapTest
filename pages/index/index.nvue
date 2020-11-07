@@ -1,0 +1,184 @@
+<template>
+    <view>
+        <view>
+            <view
+                style="
+            position: fixed;
+            z-index: 1;
+            bottom: 40px;
+            right: 0;"
+            >
+                <!-- <image @click="test" src="../../static/location.png" style="width: 40px;height: 40px;"></image> -->
+                <image @click="location" src="../../static/location.png" style="width: 40px;height: 40px;"></image>
+            </view>
+        </view>
+        <map
+            id="map"
+            ref="map"
+            :style="'width: ' + width + '; height: ' + height + ';'"
+            :scale="map.scale"
+            @regionchange="regionchange"
+            @updated="updated"
+            :latitude="map.latitude"
+            :longitude="map.longitude"
+            :markers="covers"
+            @callouttap="de"
+            @markertap="de"
+        ></map>
+    </view>
+</template>
+
+<script>
+var map;
+export default {
+    data() {
+        return {
+            height: '500px',
+            width: '500px',
+            map: {
+                scale: 13,
+                latitude: 39.909,
+                longitude: 116.39742
+            },
+            covers: [
+                {
+                    latitude: 39.909,
+                    longitude: 116.39742
+                }
+            ],
+            list: [],
+            load: true
+        };
+    },
+    onLoad() {
+        // 创建地图上下文
+        map = uni.createMapContext('map', this);
+        // 设置屏幕高度
+        uni.getSystemInfo({
+            success: res => {
+                this.height = res.windowHeight + 'px';
+                this.width = res.windowWidth + 'px';
+            }
+        });
+        this.location();
+    },
+
+    methods: {
+        test() {},
+        updated() {
+            console.log('渲染完成');
+        },
+        // 当视野发生改变
+        regionchange() {
+            console.log('当视野发生改变');
+            let loadDelay = 200;
+            if (this.load) {
+                console.log('等待加载');
+            } else {
+                this.load = true;
+                setTimeout(() => {
+                    this.getList();
+                }, loadDelay);
+            }
+        },
+        //定位当前
+        location() {
+            console.log('开始获取地址');
+            uni.getLocation({
+                type: 'gcj02',
+                success: res => {
+                    // console.log('地址获取成功,切换到目标点nvue', res);
+                    map.moveToLocation({
+                        latitude:res.latitude,
+                        longitude:res.longitude
+                    })  
+                    this.getList(res.latitude,res.longitude);
+                },
+                fail: () => {
+                    console.log('地理位置获取失败');
+                }
+            });
+        },
+        getList(la = 0 ,lo = 0) {
+            var arr = [];
+            map.getScale({
+                success: (res) => {
+                    console.log('getScale',res)
+                    if(res.scale >= 12 ){
+                        map.getCenterLocation({
+                            success: res => {
+                                let latitude = res.latitude
+                                let longitude = res.longitude
+                                if(la !== 0){
+                                    latitude = la 
+                                    longitude = lo
+                                }
+                                console.log('当前中心坐标',latitude +','+ longitude);
+                                uni.request({
+                                    data: {
+                                        latitude: latitude,
+                                        longitude: longitude
+                                    },
+                                    method: 'POST',
+                                    url: 'https://api.mymoyi.cn/api/moyicosmic/test/testList',
+                                    success: res => {
+                                        console.log('完成请求', res);
+                                        
+                                        if (res.data.code) {
+                                            res = res.data.data;
+                                            for (var i = 0; i < res.list.length; i++) {
+                                                this.list = res.list;
+                                                arr.push({
+                                                    id: i,
+                                                    callout: {
+                                                        content: res.list[i].text.substr(0, 10),
+                                                        color: '#000',
+                                                        textAlign: 'center',
+                                                        display: 'ALWAYS',
+                                                        padding: 5
+                                                    },
+                                                    latitude: res.list[i].latitude,
+                                                    longitude: res.list[i].longitude,
+                                                    iconPath: res.list[i].avatar,
+                                                    width: 30,
+                                                    height: 30
+                                                });
+                                            }
+                                        } else {
+                                            uni.showToast({
+                                                title: res.data.msg,
+                                                icon: 'none'
+                                            });
+                                        }
+                                        this.covers = arr;
+                                    },
+                                    complete: () => {
+                                        this.load = false;
+                                    }
+                                });
+                            }
+                        });
+                    }else{
+                        this.load = false;
+                        this.covers = arr;
+                        // uni.showToast({
+                        //     title: '目标群体太大了缩小点',
+                        //     icon: 'none'
+                        // });
+                    }
+                }
+            })
+            
+        },
+        de(i) {
+            let a = this.list[i.detail.markerId];
+            uni.showModal({
+                title: '用户：' + a.nickname,
+                content: a.text
+            });
+        }
+    }
+};
+</script>
+
+<style></style>
